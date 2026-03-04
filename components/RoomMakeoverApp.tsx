@@ -14,6 +14,13 @@ const STYLES = [
   { id: 'bohemian', name: 'Bohemian', image: 'https://picsum.photos/seed/bohemian/400/300' },
   { id: 'minimalist', name: 'Minimalist', image: 'https://picsum.photos/seed/minimalist/400/300' },
   { id: 'coastal', name: 'Coastal', image: 'https://picsum.photos/seed/coastal/400/300' },
+  { id: 'chinese-minimalist', name: 'Chinese Minimalist', image: 'https://picsum.photos/seed/chineseminimalist/400/300' },
+  { id: 'japanese', name: 'Japanese', image: 'https://picsum.photos/seed/japanese/400/300' },
+  { id: 'ukrainian-cossack', name: 'Ukrainian Cossack', image: 'https://picsum.photos/seed/ukrainiancossack/400/300' },
+  { id: 'gothic', name: 'Gothic', image: 'https://picsum.photos/seed/gothic/400/300' },
+  { id: 'byzantine', name: 'Byzantine', image: 'https://picsum.photos/seed/byzantine/400/300' },
+  { id: 'greek', name: 'Greek', image: 'https://picsum.photos/seed/greek/400/300' },
+  { id: 'roman', name: 'Roman', image: 'https://picsum.photos/seed/roman/400/300' },
 ];
 
 type ImageData = {
