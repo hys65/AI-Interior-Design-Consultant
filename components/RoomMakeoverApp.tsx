@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { GoogleGenAI, Type, FunctionDeclaration, GenerateContentResponse } from '@google/genai';
 import { UploadCloud, Download, Sparkles, MessageSquare, Image as ImageIcon, ArrowRight, Loader2, Send, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
@@ -47,7 +46,6 @@ export default function RoomMakeoverApp() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const ai = new GoogleGenAI({ apiKey: process.env.NEXT_PUBLIC_GEMINI_API_KEY as string });
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -87,42 +85,36 @@ export default function RoomMakeoverApp() {
       const imageToEdit = baseImage || originalImage;
       const promptText = customPrompt || `Redesign this room in ${styleName} style. Keep the layout similar.`;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        contents: {
-          parts: [
-            {
-              inlineData: {
-                data: imageToEdit.data,
-                mimeType: imageToEdit.mimeType,
-              },
-            },
-            {
-              text: promptText,
-            },
-          ],
-        },
+      const response = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'generate-image',
+          prompt: promptText,
+          image: {
+            data: imageToEdit.data,
+            mimeType: imageToEdit.mimeType,
+          },
+        }),
       });
 
-      let foundImage = false;
-      for (const part of response.candidates?.[0]?.content?.parts || []) {
-        if (part.inlineData && part.inlineData.data) {
-          const base64EncodeString = part.inlineData.data;
-          const mimeType = part.inlineData.mimeType || 'image/png';
-          const imageUrl = `data:${mimeType};base64,${base64EncodeString}`;
-          setGeneratedImage({
-            data: base64EncodeString,
-            mimeType: mimeType,
-            url: imageUrl,
-          });
-          foundImage = true;
-          break;
-        }
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Image generation failed.');
       }
 
-      if (!foundImage) {
-        throw new Error("No image generated.");
+      const generated = data.image;
+      if (!generated?.data) {
+        throw new Error('No image generated.');
       }
+
+      const mimeType = generated.mimeType || 'image/png';
+      const imageUrl = `data:${mimeType};base64,${generated.data}`;
+      setGeneratedImage({
+        data: generated.data,
+        mimeType,
+        url: imageUrl,
+      });
 
       setChatHistory(prev => [...prev, {
         role: 'model',
@@ -145,21 +137,6 @@ export default function RoomMakeoverApp() {
     generateDesign(styleName);
   };
 
-  const updateDesignFunctionDeclaration: FunctionDeclaration = {
-    name: "updateDesign",
-    parameters: {
-      type: Type.OBJECT,
-      description: "Update the room design based on the user's request. Use this when the user asks to change the image, like 'make the rug blue' or 'add a retro filter'.",
-      properties: {
-        prompt: {
-          type: Type.STRING,
-          description: "The prompt to use for the image generation, e.g., 'Change the rug to blue' or 'Add a retro filter'.",
-        },
-      },
-      required: ["prompt"],
-    },
-  };
-
   const handleSendMessage = async () => {
     if (!chatInput.trim()) return;
 
@@ -169,22 +146,22 @@ export default function RoomMakeoverApp() {
     setIsChatting(true);
 
     try {
-      const chat = ai.chats.create({
-        model: "gemini-3.1-pro-preview",
-        config: {
-          systemInstruction: "You are an expert AI interior design consultant. The user has uploaded a photo of their room and generated a new design. Answer their questions, provide advice, and if they ask for specific items, provide shoppable links (you can make up realistic URLs for the sake of this demo). If the user asks to change the design visually (e.g., 'make the rug blue', 'add a retro filter'), you MUST use the `updateDesign` tool to trigger a new image generation with their request.",
-          tools: [{ functionDeclarations: [updateDesignFunctionDeclaration] }],
-        },
+      const response = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'chat',
+          currentStyle: currentStyle || 'None',
+          userText,
+        }),
       });
 
-      // Send previous history to establish context
-      // We can just send the current message, and the model will have context if we pass history, but `ai.chats.create` doesn't take history directly in this SDK version easily unless we send multiple messages.
-      // Let's just send the current message with some context injected.
-      const contextMessage = `Current style: ${currentStyle || 'None'}. User message: ${userText}`;
-      
-      const response = await chat.sendMessage({ message: contextMessage });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Chat request failed.');
+      }
 
-      const functionCalls = response.functionCalls;
+      const functionCalls = data.functionCalls;
       if (functionCalls && functionCalls.length > 0) {
         const call = functionCalls[0];
         if (call.name === 'updateDesign') {
@@ -199,8 +176,8 @@ export default function RoomMakeoverApp() {
           // We don't need to send a tool response back to the chat for this simple flow, 
           // as the visual update is the main result.
         }
-      } else if (response.text) {
-        setChatHistory(prev => [...prev, { role: 'model', text: response.text || '' }]);
+      } else if (data.text) {
+        setChatHistory(prev => [...prev, { role: 'model', text: data.text || '' }]);
       }
 
     } catch (error) {
